@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Simple Todos Frontend</title>
+  <style>
+    body { font-family: sans-serif; max-width: 500px; margin: 2em auto; }
+    .hidden { display: none; }
+    input, button { margin: 0.2em 0; }
+    ul { padding-left: 1.2em; }
+    li { margin-bottom: 0.5em; }
+    .todo-actions button { margin-left: 0.3em; }
+    .error { color: red; }
+    .success { color: green; }
+  </style>
+</head>
+<body>
+  <h2 id="app-title">Todos App</h2>
+
+  <div id="auth-section">
+    <h3>Login</h3>
+    <form id="login-form">
+      <input type="text" id="login-username" placeholder="Username" required><br>
+      <input type="password" id="login-password" placeholder="Password" required><br>
+      <button type="submit">Login</button>
+    </form>
+    <p>or</p>
+    <h3>Sign Up</h3>
+    <form id="signup-form">
+      <input type="text" id="signup-username" placeholder="Username" required><br>
+      <input type="password" id="signup-password" placeholder="Password" required><br>
+      <button type="submit">Sign Up</button>
+    </form>
+    <div id="auth-message"></div>
+  </div>
+
+  <div id="todos-section" class="hidden">
+    <button id="logout-btn">Logout</button>
+    <h3>Your Todos</h3>
+    <ul id="todos-list"></ul>
+    <h4>Add Todo</h4>
+    <form id="add-todo-form">
+      <input type="text" id="todo-title" placeholder="Title" required>
+      <input type="text" id="todo-desc" placeholder="Description">
+      <button type="submit">Add</button>
+    </form>
+    <div id="todos-message"></div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:3000';
+    const authSection = document.getElementById('auth-section');
+    const todosSection = document.getElementById('todos-section');
+    const authMessage = document.getElementById('auth-message');
+    const todosMessage = document.getElementById('todos-message');
+    const todosList = document.getElementById('todos-list');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    // Show/hide sections based on auth
+    function showTodos() {
+      authSection.classList.add('hidden');
+      todosSection.classList.remove('hidden');
+      loadTodos();
+    }
+    function showAuth() {
+      authSection.classList.remove('hidden');
+      todosSection.classList.add('hidden');
+      localStorage.removeItem('token');
+    }
+
+    // Handle login
+    document.getElementById('login-form').onsubmit = async (e) => {
+      e.preventDefault();
+      authMessage.textContent = '';
+      const username = document.getElementById('login-username').value;
+      const password = document.getElementById('login-password').value;
+      try {
+        const res = await fetch(`${API}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          localStorage.setItem('token', data.token);
+          showTodos();
+        } else {
+          authMessage.textContent = data.message || 'Login failed.';
+          authMessage.className = 'error';
+        }
+      } catch {
+        authMessage.textContent = 'Network error.';
+        authMessage.className = 'error';
+      }
+    };
+
+    // Handle signup
+    document.getElementById('signup-form').onsubmit = async (e) => {
+      e.preventDefault();
+      authMessage.textContent = '';
+      const username = document.getElementById('signup-username').value;
+      const password = document.getElementById('signup-password').value;
+      try {
+        const res = await fetch(`${API}/auth/signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          authMessage.textContent = 'Signup successful! Please login.';
+          authMessage.className = 'success';
+        } else {
+          authMessage.textContent = data.message || 'Signup failed.';
+          authMessage.className = 'error';
+        }
+      } catch {
+        authMessage.textContent = 'Network error.';
+        authMessage.className = 'error';
+      }
+    };
+
+    // Logout
+    logoutBtn.onclick = () => {
+      showAuth();
+    };
+
+    // Load todos
+    async function loadTodos() {
+      todosList.innerHTML = '';
+      todosMessage.textContent = '';
+      try {
+        const res = await fetch(`${API}/todos`, {
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+        });
+        if (res.status === 401) {
+          showAuth();
+          return;
+        }
+        const todos = await res.json();
+        if (Array.isArray(todos)) {
+          todos.forEach(todo => {
+            const li = document.createElement('li');
+            li.innerHTML = `<b>${todo.title}</b> - ${todo.description} [${todo.completed ? '✔️' : '❌'}]
+              <span class="todo-actions">
+                <button onclick="editTodo(${todo.id}, '${todo.title.replace(/'/g, "\\'")}', '${todo.description.replace(/'/g, "\\'")}', ${todo.completed})">Edit</button>
+                <button onclick="deleteTodo(${todo.id})">Delete</button>
+              </span>`;
+            todosList.appendChild(li);
+          });
+        }
+      } catch {
+        todosMessage.textContent = 'Failed to load todos.';
+        todosMessage.className = 'error';
+      }
+    }
+
+    // Add todo
+    document.getElementById('add-todo-form').onsubmit = async (e) => {
+      e.preventDefault();
+      todosMessage.textContent = '';
+      const title = document.getElementById('todo-title').value;
+      const description = document.getElementById('todo-desc').value;
+      try {
+        const res = await fetch(`${API}/todos`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + localStorage.getItem('token')
+          },
+          body: JSON.stringify({ title, description })
+        });
+        if (res.status === 401) {
+          showAuth();
+          return;
+        }
+        if (res.ok) {
+          document.getElementById('add-todo-form').reset();
+          loadTodos();
+        } else {
+          const data = await res.json();
+          todosMessage.textContent = data.message || 'Failed to add todo.';
+          todosMessage.className = 'error';
+        }
+      } catch {
+        todosMessage.textContent = 'Network error.';
+        todosMessage.className = 'error';
+      }
+    };
+
+    // Edit todo (prompt-based, for simplicity)
+    window.editTodo = async (id, oldTitle, oldDesc, oldCompleted) => {
+      const title = prompt('Edit title:', oldTitle);
+      if (title === null) return;
+      const description = prompt('Edit description:', oldDesc);
+      if (description === null) return;
+      const completed = confirm('Mark as completed? (OK = Yes, Cancel = No)');
+      try {
+        const res = await fetch(`${API}/todos/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + localStorage.getItem('token')
+          },
+          body: JSON.stringify({ title, description, completed })
+        });
+        if (res.status === 401) {
+          showAuth();
+          return;
+        }
+        if (res.ok) {
+          loadTodos();
+        } else {
+          const data = await res.json();
+          todosMessage.textContent = data.message || 'Failed to update todo.';
+          todosMessage.className = 'error';
+        }
+      } catch {
+        todosMessage.textContent = 'Network error.';
+        todosMessage.className = 'error';
+      }
+    };
+
+    // Delete todo
+    window.deleteTodo = async (id) => {
+      if (!confirm('Delete this todo?')) return;
+      try {
+        const res = await fetch(`${API}/todos/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+        });
+        if (res.status === 401) {
+          showAuth();
+          return;
+        }
+        if (res.ok) {
+          loadTodos();
+        } else {
+          const data = await res.json();
+          todosMessage.textContent = data.message || 'Failed to delete todo.';
+          todosMessage.className = 'error';
+        }
+      } catch {
+        todosMessage.textContent = 'Network error.';
+        todosMessage.className = 'error';
+      }
+    };
+
+    // On load, check for token
+    if (localStorage.getItem('token')) {
+      showTodos();
+    } else {
+      showAuth();
+    }
+  </script>
+</body>
+</html> 
