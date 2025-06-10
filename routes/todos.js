@@ -51,6 +51,7 @@ router.post('/', async (req, res) => {
     });
     res.status(201).json(todo);
   } catch (err) {
+    console.error('Error creating todo:', err); // <-- Add this line
     res.status(500).json({ message: 'Error creating todo' });
   }
 });
