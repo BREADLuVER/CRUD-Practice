@@ -9,6 +9,8 @@ function GlobalHeader() {
     <header style={{ padding: 16, borderBottom: '1px solid #ccc', marginBottom: 24 }}>
       <nav style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
         <Link href="/">Home</Link>
+        <Link href="/posts">Posts</Link>
+        {user && <Link href="/create">Create</Link>}
         {user ? (
           <>
             <span>Welcome, {user.name}</span>
